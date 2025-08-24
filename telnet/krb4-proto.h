@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1995-2025 Free Software Foundation, Inc.
+  Copyright (C) 1995-2022 Free Software Foundation, Inc.
 
   This file is part of GNU Inetutils.
 
@@ -20,8 +20,7 @@
 int add_ticket (KTEXT, int, char *, int, char *, char *, char *, int, KTEXT);
 
 /* cr_err_reply.c */
-void cr_err_reply (KTEXT, char *, char *, char *, unsigned long,
-		   unsigned long, char *);
+void cr_err_reply (KTEXT, char *, char *, char *, unsigned long, unsigned long, char *);
 
 /* create_auth_reply.c */
 KTEXT create_auth_reply (char *, char *, char *, long, int, unsigned long,
@@ -138,17 +137,16 @@ int new_log (long, char *);
 long krb_mk_err (unsigned char *, long, char *);
 
 /* mk_priv.c */
-long krb_mk_priv (unsigned char *, unsigned char *, unsigned long,
-		  Key_schedule, C_Block, struct sockaddr_in *,
-		  struct sockaddr_in *);
+long krb_mk_priv (unsigned char *, unsigned char *, unsigned long, Key_schedule, C_Block,
+		  struct sockaddr_in *, struct sockaddr_in *);
 
 /* mk_req.c */
 int krb_mk_req (KTEXT, char *, char *, char *, long);
 int krb_set_lifetime (int);
 
 /* mk_safe.c */
-long krb_mk_safe (unsigned char *, unsigned char *, unsigned long, C_Block *,
-		  struct sockaddr_in *, struct sockaddr_in *);
+long krb_mk_safe (unsigned char *, unsigned char *, unsigned long, C_Block *, struct sockaddr_in *,
+		  struct sockaddr_in *);
 
 /* month_sname.c */
 char *month_sname (int);
@@ -179,8 +177,8 @@ int krb_set_key (char *, int);
 int krb_rd_req (KTEXT, char *, char *, long, AUTH_DAT *, char *);
 
 /* rd_safe.c */
-long krb_rd_safe (unsigned char *, unsigned long, C_Block *,
-		  struct sockaddr_in *, struct sockaddr_in *, MSG_DAT *);
+long krb_rd_safe (unsigned char *, unsigned long, C_Block *, struct sockaddr_in *,
+		  struct sockaddr_in *, MSG_DAT *);
 
 /* read_service_key.c */
 int read_service_key (char *, char *, char *, int, char *, char *);
@@ -197,9 +195,9 @@ int save_credentials (char *, char *, char *, C_Block, int, int, KTEXT, long);
 int send_to_kdc (KTEXT, KTEXT, char *);
 
 /* sendauth.c */
-int krb_sendauth (long, int, KTEXT, char *, char *, char *, unsigned long,
-		  MSG_DAT *, CREDENTIALS *, Key_schedule,
-		  struct sockaddr_in *, struct sockaddr_in *, char *);
+int krb_sendauth (long, int, KTEXT, char *, char *, char *, unsigned long, MSG_DAT *,
+		  CREDENTIALS *, Key_schedule, struct sockaddr_in *,
+		  struct sockaddr_in *, char *);
 int krb_sendsvc (int, char *);
 
 /* setenv.c */

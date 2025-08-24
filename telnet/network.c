@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1995-2025 Free Software Foundation, Inc.
+  Copyright (C) 1995-2022 Free Software Foundation, Inc.
 
   This file is part of GNU Inetutils.
 
@@ -109,7 +109,7 @@ stilloob (void)
   if (value < 0)
     {
       perror ("select");
-      (void) quit (0, NULL);
+      (void) quit(0, NULL);
       /* NOTREACHED */
     }
   if (FD_ISSET (net, &excepts))
@@ -149,7 +149,7 @@ setneturg (void)
 int
 netflush (void)
 {
-  int n, n1;
+  register int n, n1;
 
 #ifdef	ENCRYPTION
   if (encrypt_output)

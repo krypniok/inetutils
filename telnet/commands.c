@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1995-2025 Free Software Foundation, Inc.
+  Copyright (C) 1995-2022 Free Software Foundation, Inc.
 
   This file is part of GNU Inetutils.
 
@@ -58,7 +58,6 @@
 #include <netinet/in.h>
 
 #include <fcntl.h>
-#include <unistd.h>
 
 #include <signal.h>
 #include <netdb.h>
@@ -68,8 +67,7 @@
 #include <errno.h>
 
 #include <stdlib.h>
-#include <string.h>
-#include <limits.h>		/* LLONG_MAX for Solaris. */
+#include <limits.h>	/* LLONG_MAX for Solaris. */
 
 #include <arpa/inet.h>
 #include <arpa/telnet.h>
@@ -92,7 +90,6 @@
 #include "types.h"
 
 #include "xalloc.h"
-#include "xstrtol.h"
 #include "xvasprintf.h"
 #include "xalloc.h"
 
@@ -109,16 +106,18 @@
 # endif
 # if (defined vax || defined tahoe || defined hp300) && !defined ultrix
 #  include <machine/endian.h>
-# endif/* vax */
+# endif	/* vax */
 #endif /* !defined(CRAY) && !defined(sysV88) */
 
 #ifdef HAVE_NETINET_IP_H
 # include <netinet/ip.h>
 #endif
 
-char *hostname = NULL;
+char *hostname = 0;
 
-extern int isprefix (const char *s1, const char *s2);
+extern char *getenv (const char *);
+
+extern int isprefix (register const char *s1, register const char *s2);
 extern char **genget (const char *, char **, int);
 extern int Ambiguous (void *);
 
@@ -129,7 +128,7 @@ typedef struct
 {
   const char *name;		/* command name */
   const char *help;		/* help string (NULL for no help) */
-  int (*handler) (int, char *[]);	/* routine which executes command */
+  int (*handler) (int, char *[]);		/* routine which executes command */
   int needconnect;		/* Do we need to be connected to execute? */
 } Command;
 
@@ -140,14 +139,14 @@ static char saveline[256];
 static int margc;
 static char *margv[TELNET_MAX_ARGS];
 
-static struct env_lst *env_help (const char *, char *);
-static void slc_help (int);
+static struct env_lst *env_help(const char *, char *);
+static void slc_help(int);
 
 static void
 makeargv (void)
 {
-  char *cp, *cp2, c;
-  char **argp = margv;
+  register char *cp, *cp2, c;
+  register char **argp = margv;
 
   margc = 0;
   cp = line;
@@ -160,7 +159,7 @@ makeargv (void)
     }
   while ((c = *cp))
     {
-      int inquote = 0;
+      register int inquote = 0;
       while (isspace (c))
 	c = *++cp;
       if (c == '\0')
@@ -219,9 +218,9 @@ makeargv (void)
  */
 
 static int
-special (char *s)
+special (register char *s)
 {
-  char c;
+  register char c;
   char b;
 
   switch (*s)
@@ -249,7 +248,7 @@ special (char *s)
  * for a special character.
  */
 static const char *
-control (cc_t c)
+control (register cc_t c)
 {
   static char buf[5];
   /*
@@ -259,7 +258,7 @@ control (cc_t c)
    * was to assign "c" to an unsigned int variable...
    * Arggg....
    */
-  unsigned int uic = (unsigned int) c;
+  register unsigned int uic = (unsigned int) c;
 
   if (uic == 0x7f)
     return ("^?");
@@ -309,40 +308,40 @@ struct sendlist
 };
 
 
-static int send_esc (const char *);
-static int send_docmd (const char *);
-static int send_dontcmd (const char *);
-static int send_willcmd (const char *);
-static int send_wontcmd (const char *);
-static int send_help (const char *);
+static int send_esc(const char *);
+static int send_docmd(const char *);
+static int send_dontcmd(const char *);
+static int send_willcmd(const char *);
+static int send_wontcmd(const char *);
+static int send_help(const char *);
 
 static struct sendlist Sendlist[] = {
-  {"ao", "Send Telnet Abort output", 1, 0, NULL, 2, AO},
-  {"ayt", "Send Telnet 'Are You There'", 1, 0, NULL, 2, AYT},
-  {"brk", "Send Telnet Break", 1, 0, NULL, 2, BREAK},
-  {"break", NULL, 1, 0, NULL, 2, BREAK},
-  {"ec", "Send Telnet Erase Character", 1, 0, NULL, 2, EC},
-  {"el", "Send Telnet Erase Line", 1, 0, NULL, 2, EL},
+  {"ao", "Send Telnet Abort output", 1, 0, 0, 2, AO},
+  {"ayt", "Send Telnet 'Are You There'", 1, 0, 0, 2, AYT},
+  {"brk", "Send Telnet Break", 1, 0, 0, 2, BREAK},
+  {"break", 0, 1, 0, 0, 2, BREAK},
+  {"ec", "Send Telnet Erase Character", 1, 0, 0, 2, EC},
+  {"el", "Send Telnet Erase Line", 1, 0, 0, 2, EL},
   {"escape", "Send current escape character", 1, 0, send_esc, 1, 0},
-  {"ga", "Send Telnet 'Go Ahead' sequence", 1, 0, NULL, 2, GA},
-  {"ip", "Send Telnet Interrupt Process", 1, 0, NULL, 2, IP},
-  {"intp", NULL, 1, 0, NULL, 2, IP},
-  {"interrupt", NULL, 1, 0, NULL, 2, IP},
-  {"intr", NULL, 1, 0, 0, 2, IP},
-  {"nop", "Send Telnet 'No operation'", 1, 0, NULL, 2, NOP},
-  {"eor", "Send Telnet 'End of Record'", 1, 0, NULL, 2, EOR},
-  {"abort", "Send Telnet 'Abort Process'", 1, 0, NULL, 2, ABORT},
-  {"susp", "Send Telnet 'Suspend Process'", 1, 0, NULL, 2, SUSP},
-  {"eof", "Send Telnet End of File Character", 1, 0, NULL, 2, xEOF},
+  {"ga", "Send Telnet 'Go Ahead' sequence", 1, 0, 0, 2, GA},
+  {"ip", "Send Telnet Interrupt Process", 1, 0, 0, 2, IP},
+  {"intp", 0, 1, 0, 0, 2, IP},
+  {"interrupt", 0, 1, 0, 0, 2, IP},
+  {"intr", 0, 1, 0, 0, 2, IP},
+  {"nop", "Send Telnet 'No operation'", 1, 0, 0, 2, NOP},
+  {"eor", "Send Telnet 'End of Record'", 1, 0, 0, 2, EOR},
+  {"abort", "Send Telnet 'Abort Process'", 1, 0, 0, 2, ABORT},
+  {"susp", "Send Telnet 'Suspend Process'", 1, 0, 0, 2, SUSP},
+  {"eof", "Send Telnet End of File Character", 1, 0, 0, 2, xEOF},
   {"synch", "Perform Telnet 'Synch operation'", 1, 0, dosynch, 2, 0},
   {"getstatus", "Send request for STATUS", 1, 0, get_status, 6, 0},
   {"?", "Display send options", 0, 0, send_help, 0, 0},
-  {"help", NULL, 0, 0, send_help, 0, 0},
-  {"do", NULL, 0, 1, send_docmd, 3, 0},
-  {"dont", NULL, 0, 1, send_dontcmd, 3, 0},
-  {"will", NULL, 0, 1, send_willcmd, 3, 0},
-  {"wont", NULL, 0, 1, send_wontcmd, 3, 0},
-  {NULL, NULL, 0, 0, NULL, 0, 0}
+  {"help", 0, 0, 0, send_help, 0, 0},
+  {"do", 0, 0, 1, send_docmd, 3, 0},
+  {"dont", 0, 0, 1, send_dontcmd, 3, 0},
+  {"will", 0, 0, 1, send_willcmd, 3, 0},
+  {"wont", 0, 0, 1, send_wontcmd, 3, 0},
+  {NULL, 0, 0, 0, NULL, 0, 0}
 };
 
 #define GETSEND(name) ((struct sendlist *) genget(name, (char **) Sendlist, \
@@ -424,8 +423,9 @@ sendcmd (int argc, char **argv)
       if ((s = GETSEND (argv[i])) == 0)
 	{
 	  fprintf (stderr, "Telnet 'send' error - argument disappeared!\n");
-	  (void) quit (0, NULL);
-	 /*NOTREACHED*/}
+	  (void) quit(0, NULL);
+	  /*NOTREACHED*/
+	}
       if (s->handler)
 	{
 	  count++;
@@ -455,11 +455,11 @@ send_tncmd (void (*func) (int, int), char *cmd, const char *name)
 #if !HAVE_DECL_TELOPTS
   extern char *telopts[];
 #endif
-  intmax_t value = 0;
+  register int val = 0;
 
   if (isprefix (name, "help") || isprefix (name, "?"))
     {
-      int col, len;
+      register int col, len;
 
       printf ("Usage: send %s <value|option>\n", cmd);
       printf ("\"value\" must be from 0 to 255\n");
@@ -490,25 +490,30 @@ send_tncmd (void (*func) (int, int), char *cmd, const char *name)
   if (cpp)
     {
 #if HAVE_DECL_TELOPTS
-      value = cpp - (char **) telopts;
+      val = cpp - (char **) telopts;
 #else /* !HAVE_DECL_TELOPTS */
-      value = cpp - telopts;
+      val = cpp - telopts;
 #endif
     }
   else
     {
-      const char *cp = name;
-      enum strtol_error err = xstrtoimax (cp, NULL, 10, &value, "");
+      register const char *cp = name;
 
-      if (err == LONGINT_OVERFLOW || value < 0 || value > 255)
+      while (*cp >= '0' && *cp <= '9')
 	{
-	  fprintf (stderr, "'%s': bad value ('send %s ?' for help).\n",
+	  val *= 10;
+	  val += *cp - '0';
+	  cp++;
+	}
+      if (*cp != 0)
+	{
+	  fprintf (stderr, "'%s': unknown argument ('send %s ?' for help).\n",
 		   name, cmd);
 	  return 0;
 	}
-      else if (err != LONGINT_OK)
+      else if (val < 0 || val > 255)
 	{
-	  fprintf (stderr, "'%s': unknown argument ('send %s ?' for help).\n",
+	  fprintf (stderr, "'%s': bad value ('send %s ?' for help).\n",
 		   name, cmd);
 	  return 0;
 	}
@@ -518,7 +523,7 @@ send_tncmd (void (*func) (int, int), char *cmd, const char *name)
       printf ("?Need to be connected first.\n");
       return 0;
     }
-  (*func) (value, 1);
+  (*func) (val, 1);
   return 1;
 }
 
@@ -754,76 +759,76 @@ struct togglelist
 static struct togglelist Togglelist[] = {
   {"autoflush",
    "flushing of output when sending interrupt characters",
-   NULL,
+   0,
    &autoflush,
    "flush output when sending interrupt characters"},
   {"autosynch",
    "automatic sending of interrupt characters in urgent mode",
-   NULL,
+   0,
    &autosynch,
    "send interrupt characters in urgent mode"},
 #if defined AUTHENTICATION
   {"autologin",
    "automatic sending of login and/or authentication info",
-   NULL,
+   0,
    &autologin,
    "send login name and/or authentication information"},
   {"authdebug",
    "Toggle authentication debugging",
    auth_togdebug,
-   NULL,
+   0,
    "print authentication debugging information"},
 #endif
 #ifdef	ENCRYPTION
   {"autoencrypt",
    "automatic encryption of data stream",
    EncryptAutoEnc,
-   NULL,
+   0,
    "automatically encrypt output"},
   {"autodecrypt",
    "automatic decryption of data stream",
    EncryptAutoDec,
-   NULL,
+   0,
    "automatically decrypt input"},
   {"verbose_encrypt",
    "Toggle verbose encryption output",
    EncryptVerbose,
-   NULL,
+   0,
    "print verbose encryption output"},
   {"encdebug",
    "Toggle encryption debugging",
    EncryptDebug,
-   NULL,
+   0,
    "print encryption debugging information"},
 #endif /* ENCRYPTION */
   {"skiprc",
    "don't read ~/.telnetrc file",
-   NULL,
+   0,
    &skiprc,
    "skip reading of ~/.telnetrc file"},
   {"binary",
    "sending and receiving of binary data",
    togbinary,
-   NULL,
-   NULL},
+   0,
+   0},
   {"inbinary",
    "receiving of binary data",
    togrbinary,
-   NULL,
-   NULL},
+   0,
+   0},
   {"outbinary",
    "sending of binary data",
    togxbinary,
-   NULL,
-   NULL},
+   0,
+   0},
   {"crlf",
    "sending carriage returns as telnet <CR><LF>",
    togcrlf,
    &crlf,
-   NULL},
+   0},
   {"crmod",
    "mapping of received carriage returns",
-   NULL,
+   0,
    &crmod,
    "map carriage return on output"},
   {"localchars",
@@ -831,16 +836,16 @@ static struct togglelist Togglelist[] = {
    lclchars,
    &localchars,
    "recognize certain control characters"},
-  {" ", "", NULL, NULL, NULL},	/* empty line */
+  {" ", "", 0, NULL, NULL},			/* empty line */
 #if (defined unix || defined __unix || defined __unix__) && defined TN3270
   {"apitrace",
    "(debugging) toggle tracing of API transactions",
-   NULL,
+   0,
    &apitrace,
    "trace API transactions"},
   {"cursesdata",
    "(debugging) toggle printing of hexadecimal curses data",
-   NULL,
+   0,
    &cursesdata,
    "print hexadecimal representation of curses data"},
 #endif /* (unix || __unix || __unix__)) && TN3270 */
@@ -851,31 +856,31 @@ static struct togglelist Togglelist[] = {
    "turn on socket level debugging"},
   {"netdata",
    "printing of hexadecimal network data (debugging)",
-   NULL,
+   0,
    &netdata,
    "print hexadecimal representation of network traffic"},
   {"prettydump",
    "output of \"netdata\" to user readable format (debugging)",
-   NULL,
+   0,
    &prettydump,
    "print user readable output for \"netdata\""},
   {"options",
    "viewing of options processing (debugging)",
-   NULL,
+   0,
    &showoptions,
    "show option processing"},
   {"termdata",
    "(debugging) toggle printing of hexadecimal terminal data",
-   NULL,
+   0,
    &termdata,
    "print hexadecimal representation of terminal traffic"},
   {"?",
-   NULL,
+   0,
    togglehelp, NULL, NULL},
   {"help",
-   NULL,
+   0,
    togglehelp, NULL, NULL},
-  {NULL, NULL, NULL, NULL, NULL}
+  {NULL, NULL, 0, NULL, NULL}
 };
 
 static int
@@ -988,40 +993,38 @@ struct setlist
 
 static struct setlist Setlist[] = {
 #ifdef	KLUDGELINEMODE
-  {"echo", "character to toggle local echoing on/off", NULL, &echoc},
+  {"echo", "character to toggle local echoing on/off", 0, &echoc},
 #endif
-  {"escape", "character to escape back to telnet command mode", NULL,
-   &escape},
-  {"rlogin", "rlogin escape character", NULL, &rlogin},
+  {"escape", "character to escape back to telnet command mode", 0, &escape},
+  {"rlogin", "rlogin escape character", 0, &rlogin},
   {"tracefile", "file to write trace information to", SetNetTrace,
    (cc_t *) NetTraceFile},
-  {" ", "", NULL, NULL},
-  {" ", "The following need 'localchars' to be toggled true", NULL, NULL},
-  {"flushoutput", "character to cause an Abort Output", NULL, termFlushCharp},
-  {"interrupt", "character to cause an Interrupt Process", NULL,
-   termIntCharp},
-  {"quit", "character to cause an Abort process", NULL, termQuitCharp},
-  {"eof", "character to cause an EOF ", NULL, termEofCharp},
-  {" ", "", NULL, NULL},
-  {" ", "The following are for local editing in linemode", NULL, NULL},
-  {"erase", "character to use to erase a character", NULL, termEraseCharp},
-  {"kill", "character to use to erase a line", NULL, termKillCharp},
-  {"lnext", "character to use for literal next", NULL, termLiteralNextCharp},
-  {"susp", "character to cause a Suspend Process", NULL, termSuspCharp},
-  {"reprint", "character to use for line reprint", NULL, termRprntCharp},
-  {"worderase", "character to use to erase a word", NULL, termWerasCharp},
-  {"start", "character to use for XON", NULL, termStartCharp},
-  {"stop", "character to use for XOFF", NULL, termStopCharp},
-  {"forw1", "alternate end of line character", NULL, termForw1Charp},
-  {"forw2", "alternate end of line character", NULL, termForw2Charp},
-  {"ayt", "alternate AYT character", NULL, termAytCharp},
-  {NULL, NULL, NULL, NULL}
+  {" ", "", 0, NULL},
+  {" ", "The following need 'localchars' to be toggled true", 0, 0},
+  {"flushoutput", "character to cause an Abort Output", 0, termFlushCharp},
+  {"interrupt", "character to cause an Interrupt Process", 0, termIntCharp},
+  {"quit", "character to cause an Abort process", 0, termQuitCharp},
+  {"eof", "character to cause an EOF ", 0, termEofCharp},
+  {" ", "", 0, NULL},
+  {" ", "The following are for local editing in linemode", 0, 0},
+  {"erase", "character to use to erase a character", 0, termEraseCharp},
+  {"kill", "character to use to erase a line", 0, termKillCharp},
+  {"lnext", "character to use for literal next", 0, termLiteralNextCharp},
+  {"susp", "character to cause a Suspend Process", 0, termSuspCharp},
+  {"reprint", "character to use for line reprint", 0, termRprntCharp},
+  {"worderase", "character to use to erase a word", 0, termWerasCharp},
+  {"start", "character to use for XON", 0, termStartCharp},
+  {"stop", "character to use for XOFF", 0, termStopCharp},
+  {"forw1", "alternate end of line character", 0, termForw1Charp},
+  {"forw2", "alternate end of line character", 0, termForw2Charp},
+  {"ayt", "alternate AYT character", 0, termAytCharp},
+  {NULL, NULL, 0, NULL}
 };
 
 #if defined CRAY && !defined __STDC__
 /* Work around compiler bug in pcc 4.1.5 */
 void
-_setlist_init (void)
+_setlist_init ()
 {
 # ifndef KLUDGELINEMODE
 #  define N 5
@@ -1171,7 +1174,7 @@ unsetcmd (int argc, char *argv[])
 {
   struct setlist *ct;
   struct togglelist *c;
-  char *name;
+  register char *name;
 
   if (argc < 2)
     {
@@ -1350,21 +1353,21 @@ static struct modelist ModeList[] = {
   {"", "", NULL, 0, 0},
   {"", "These require the LINEMODE option to be enabled", NULL, 0, 0},
   {"isig", "Enable signal trapping", set_mode, 1, MODE_TRAPSIG},
-  {"+isig", NULL, set_mode, 1, MODE_TRAPSIG},
+  {"+isig", 0, set_mode, 1, MODE_TRAPSIG},
   {"-isig", "Disable signal trapping", clear_mode, 1, MODE_TRAPSIG},
   {"edit", "Enable character editing", set_mode, 1, MODE_EDIT},
-  {"+edit", NULL, set_mode, 1, MODE_EDIT},
+  {"+edit", 0, set_mode, 1, MODE_EDIT},
   {"-edit", "Disable character editing", clear_mode, 1, MODE_EDIT},
   {"softtabs", "Enable tab expansion", set_mode, 1, MODE_SOFT_TAB},
-  {"+softtabs", NULL, set_mode, 1, MODE_SOFT_TAB},
+  {"+softtabs", 0, set_mode, 1, MODE_SOFT_TAB},
   {"-softtabs", "Disable character editing", clear_mode, 1, MODE_SOFT_TAB},
   {"litecho", "Enable literal character echo", set_mode, 1, MODE_LIT_ECHO},
-  {"+litecho", NULL, set_mode, 1, MODE_LIT_ECHO},
+  {"+litecho", 0, set_mode, 1, MODE_LIT_ECHO},
   {"-litecho", "Disable literal character echo", clear_mode, 1,
    MODE_LIT_ECHO},
-  {"help", NULL, modehelp, 0, 0},
+  {"help", 0, modehelp, 0, 0},
 #ifdef	KLUDGELINEMODE
-  {"kludgeline", NULL, dokludgemode, 1, 0},
+  {"kludgeline", 0, dokludgemode, 1, 0},
 #endif
   {"", "", NULL, 0, 0},
   {"?", "Print help information", modehelp, 0, 0},
@@ -1514,7 +1517,7 @@ display (int argc, char *argv[])
 static int
 setescape (int argc, char *argv[])
 {
-  char *arg;
+  register char *arg;
   char buf[50];
 
   printf ("Deprecated usage - please use 'set escape%s%s' in the future.\n",
@@ -1601,7 +1604,10 @@ shell (int argc, MAYBE_UNUSED char *argv[])
 	/*
 	 * Fire up the shell in the child.
 	 */
-	char *shellp, *shellname;
+	register char *shellp, *shellname;
+# ifndef strrchr
+	extern char *strrchr (const char *, int);
+# endif
 
 	shellp = getenv ("SHELL");
 	if (shellp == NULL)
@@ -1701,7 +1707,7 @@ struct slclist SlcList[] = {
    slc_mode_import, 1},
   {"check", "Verify remote special character definitions",
    slc_mode_import, 0},
-  {"help", NULL, slc_help, 0},
+  {"help", 0, slc_help, 0},
   {"?", "Print help information", slc_help, 0},
   {NULL, NULL, NULL, 0},
 };
@@ -1787,13 +1793,13 @@ struct envlist EnvList[] = {
   {"varval", "Reverse VAR and VALUE (auto, right, wrong, status)",
    env_varval, 1},
 #endif
-  {"help", NULL, env_help, 0},
+  {"help", 0, env_help, 0},
   {"?", "Print help information", env_help, 0},
   {NULL, NULL, NULL, 0},
 };
 
 static struct env_lst *
-env_help (const char *us1, char *us2)
+env_help(const char *us1, char *us2)
 {
   struct envlist *c;
 
@@ -1868,7 +1874,7 @@ struct env_lst envlisthead;
 struct env_lst *
 env_find (const char *var)
 {
-  struct env_lst *ep;
+  register struct env_lst *ep;
 
   for (ep = envlisthead.next; ep; ep = ep->next)
     {
@@ -1881,8 +1887,12 @@ env_find (const char *var)
 void
 env_init (void)
 {
-  char **epp, *cp;
-  struct env_lst *ep;
+  extern char **environ;
+  register char **epp, *cp;
+  register struct env_lst *ep;
+#ifndef strchr
+  extern char *strchr (const char *, int);
+#endif
 
   for (epp = environ; *epp; epp++)
     {
@@ -1922,7 +1932,7 @@ env_init (void)
    */
   if ((env_find ("USER") == NULL) && (ep = env_find ("LOGNAME")))
     {
-      env_define ("USER", (char *) ep->value);
+      env_define ("USER", (char*) ep->value);
       env_unexport ("USER", NULL);
     }
   env_export ("DISPLAY", NULL);
@@ -1932,7 +1942,7 @@ env_init (void)
 struct env_lst *
 env_define (const char *var, char *value)
 {
-  struct env_lst *ep = env_find (var);
+  register struct env_lst *ep = env_find (var);
   if (ep)
     {
       free (ep->var);
@@ -1947,7 +1957,7 @@ env_define (const char *var, char *value)
       if (ep->next)
 	ep->next->prev = ep;
     }
-  ep->welldefined = opt_welldefined ((char *) var);
+  ep->welldefined = opt_welldefined ((char *)var);
   ep->export = 1;
   ep->var = (unsigned char *) strdup ((char *) var);
   ep->value = (unsigned char *) strdup ((char *) value);
@@ -1957,7 +1967,7 @@ env_define (const char *var, char *value)
 struct env_lst *
 env_undefine (const char *var, char *d)
 {
-  struct env_lst *ep = env_find (var);
+  register struct env_lst *ep = env_find (var);
   if (ep)
     {
       ep->prev->next = ep->next;
@@ -1973,7 +1983,7 @@ env_undefine (const char *var, char *d)
 struct env_lst *
 env_export (const char *var, char *d)
 {
-  struct env_lst *ep = env_find (var);
+  register struct env_lst *ep = env_find (var);
   if (ep)
     ep->export = 1;
   return NULL;
@@ -1982,16 +1992,16 @@ env_export (const char *var, char *d)
 struct env_lst *
 env_unexport (const char *var, char *d)
 {
-  struct env_lst *ep = env_find (var);
+  register struct env_lst *ep = env_find (var);
   if (ep)
     ep->export = 0;
   return NULL;
 }
 
 struct env_lst *
-env_send (const char *var, char *d)
+env_send(const char *var, char *d)
 {
-  struct env_lst *ep;
+  register struct env_lst *ep;
 
   if (my_state_is_wont (TELOPT_NEW_ENVIRON)
 #ifdef	OLD_ENVIRON
@@ -2017,9 +2027,9 @@ env_send (const char *var, char *d)
 }
 
 struct env_lst *
-env_list (const char *d1, char *d2)
+env_list(const char *d1, char *d2)
 {
-  struct env_lst *ep;
+  register struct env_lst *ep;
 
   for (ep = envlisthead.next; ep; ep = ep->next)
     {
@@ -2052,7 +2062,7 @@ env_default (int init, int welldefined)
 unsigned char *
 env_getvalue (const char *var)
 {
-  struct env_lst *ep = env_find (var);
+  register struct env_lst *ep  = env_find (var);
   if (ep)
     return (ep->value);
   return (NULL);
@@ -2114,7 +2124,7 @@ struct authlist
 {
   const char *name;
   char *help;
-  int (*handler) (char *);
+  int (*handler) ();
   int narg;
 };
 
@@ -2123,18 +2133,18 @@ static int auth_help (void);
 
 struct authlist AuthList[] = {
   {"status", "Display current status of authentication information",
-   (int (*)(char *)) auth_status, 0},
+   auth_status, 0},
   {"disable", "Disable an authentication type ('auth disable ?' for more)",
    auth_disable, 1},
   {"enable", "Enable an authentication type ('auth enable ?' for more)",
    auth_enable, 1},
-  {"help", NULL, (int (*)(char *)) auth_help, 0},
-  {"?", "Print help information", (int (*)(char *)) auth_help, 0},
+  {"help", 0, auth_help, 0},
+  {"?", "Print help information", auth_help, 0},
   {NULL, NULL, NULL, 0},
 };
 
 static int
-auth_help (void)
+auth_help ()
 {
   struct authlist *c;
 
@@ -2165,7 +2175,7 @@ auth_cmd (int argc, char *argv[])
 
   c = (struct authlist *)
     genget (argv[1], (char **) AuthList, sizeof (struct authlist));
-  if (c == NULL)
+  if (c == 0)
     {
       fprintf (stderr, "'%s': unknown argument ('auth ?' for help).\n",
 	       argv[1]);
@@ -2185,7 +2195,7 @@ auth_cmd (int argc, char *argv[])
 	       c->narg, c->narg == 1 ? "" : "s", c->name);
       return 0;
     }
-  return (*c->handler) (argv[2]);
+  return ((*c->handler) (argv[2], argv[3]));
 }
 #endif
 
@@ -2198,7 +2208,7 @@ struct encryptlist
 {
   const char *name;
   const char *help;
-  int (*handler) (char *, char *);
+  int (*handler) ();
   int needconnect;
   int minarg;
   int maxarg;
@@ -2223,28 +2233,27 @@ struct encryptlist EncryptList[] = {
   {"type", "Set encryption type. ('encrypt type ?' for more)",
    EncryptType, 0, 1, 1},
   {"start", "Start encryption. ('encrypt start ?' for more)",
-   (int (*)(char *, char *)) EncryptStart, 1, 0, 1},
+   EncryptStart, 1, 0, 1},
   {"stop", "Stop encryption. ('encrypt stop ?' for more)",
-   (int (*)(char *, char *)) EncryptStop, 1, 0, 1},
+   EncryptStop, 1, 0, 1},
   {"input", "Start encrypting the input stream",
-   (int (*)(char *, char *)) EncryptStartInput, 1, 0, 0},
+   EncryptStartInput, 1, 0, 0},
   {"-input", "Stop encrypting the input stream",
-   (int (*)(char *, char *)) EncryptStopInput, 1, 0, 0},
+   EncryptStopInput, 1, 0, 0},
   {"output", "Start encrypting the output stream",
-   (int (*)(char *, char *)) EncryptStartOutput, 1, 0, 0},
+   EncryptStartOutput, 1, 0, 0},
   {"-output", "Stop encrypting the output stream",
-   (int (*)(char *, char *)) EncryptStopOutput, 1, 0, 0},
+   EncryptStopOutput, 1, 0, 0},
 
   {"status", "Display current status of authentication information",
-   (int (*)(char *, char *)) EncryptStatus, 0, 0, 0},
-  {"help", 0, (int (*)(char *, char *)) EncryptHelp, 0, 0, 0},
-  {"?", "Print help information", (int (*)(char *, char *)) EncryptHelp, 0, 0,
-   0},
+   EncryptStatus, 0, 0, 0},
+  {"help", 0, EncryptHelp, 0, 0, 0},
+  {"?", "Print help information", EncryptHelp, 0, 0, 0},
   {NULL, NULL, NULL, 0, 0, 0},
 };
 
 static int
-EncryptHelp (void)
+EncryptHelp ()
 {
   struct encryptlist *c;
 
@@ -2275,7 +2284,7 @@ encrypt_cmd (int argc, char *argv[])
 
   c = (struct encryptlist *)
     genget (argv[1], (char **) EncryptList, sizeof (struct encryptlist));
-  if (c == NULL)
+  if (c == 0)
     {
       fprintf (stderr, "'%s': unknown argument ('encrypt ?' for help).\n",
 	       argv[1]);
@@ -2313,7 +2322,8 @@ encrypt_cmd (int argc, char *argv[])
 	  return 0;
 	}
     }
-  return (*c->handler) (argc > 0 ? argv[2] : NULL, argc > 1 ? argv[3] : NULL);
+  return ((*c->handler) (argc > 0 ? argv[2] : 0,
+			 argc > 1 ? argv[3] : 0, argc > 2 ? argv[4] : 0));
 }
 #endif /* ENCRYPTION */
 
@@ -2424,7 +2434,7 @@ status (int argc, char *argv[])
     {
       printf ("Transparent mode command is '%s'.\n", transcom);
     }
-# endif/* unix || __unix || __unix__ */
+# endif /* unix || __unix || __unix__ */
   fflush (stdout);
   if (In3270)
     {
@@ -2439,10 +2449,10 @@ status (int argc, char *argv[])
  * Function that gets called when SIGINFO is received.
  */
 int
-ayt_status (void)
+ayt_status ()
 {
   call (status, "status", "notmuch", 0);
-  return 1;			/* not used */
+  return 1;	/* not used */
 }
 #endif /* SIGINFO */
 
@@ -2482,7 +2492,8 @@ tn (int argc, char *argv[])
     {
       strcpy (line, "open ");
       printf ("(to) ");
-      if (fgets (&line[strlen (line)], sizeof (line) - strlen (line), stdin))
+      if (fgets (&line[strlen (line)],
+		 sizeof (line) - strlen (line), stdin))
 	{
 	  makeargv ();
 	  argc = margc;
@@ -2558,9 +2569,7 @@ tn (int argc, char *argv[])
 	  continue;
 	}
     usage:
-      printf
-	("usage: %s [-4] [-6] [-l user] [-b addr] [-a] host-name [port]\n",
-	 cmd);
+      printf ("usage: %s [-4] [-6] [-l user] [-b addr] [-a] host-name [port]\n", cmd);
       return 0;
     }
   if (hostp == 0)
@@ -2643,7 +2652,8 @@ tn (int argc, char *argv[])
       err = getaddrinfo (srchostp, "0", &hints, &hostaddr);
       if (err < 0)
 	{
-	  printf ("Could not resolve %s: %s\n", srchostp, gai_strerror (err));
+	  printf ("Could not resolve %s: %s\n", srchostp,
+		  gai_strerror (err));
 	  return 0;
 	}
       hints.ai_family = hostaddr->ai_family;
@@ -2696,7 +2706,7 @@ tn (int argc, char *argv[])
 
       if (srchostp)
 	{
-	  err = bind (net, hostaddr->ai_addr, hostaddr->ai_addrlen);
+	  err = bind(net, hostaddr->ai_addr, hostaddr->ai_addrlen);
 	  if (err < 0)
 	    {
 	      perror ("telnet: bind");
@@ -2729,12 +2739,12 @@ tn (int argc, char *argv[])
       connected++;
 # if defined AUTHENTICATION || defined ENCRYPTION
       auth_encrypt_connect (connected);
-# endif/* defined(AUTHENTICATION) || defined(ENCRYPTION) */
+# endif	/* defined(AUTHENTICATION) || defined(ENCRYPTION) */
     }
   while (!connected);
 
   if (srchostp)
-    freeaddrinfo (hostaddr);
+    freeaddrinfo(hostaddr);
   freeaddrinfo (result);
 #else /* !IPV6 */
   temp = inet_addr (hostp);
@@ -2794,7 +2804,7 @@ tn (int argc, char *argv[])
 	if (err < 0 && errno != ENOPROTOOPT)
 	  perror ("telnet: setsockopt (IP_TOS) (ignored)");
       }
-# endif/* defined(IPPROTO_IP) && defined(IP_TOS) */
+# endif	/* defined(IPPROTO_IP) && defined(IP_TOS) */
 
       if (debug
 	  && setsockopt (net, SOL_SOCKET, SO_DEBUG, &on, sizeof (on)) < 0)
@@ -2811,7 +2821,8 @@ tn (int argc, char *argv[])
 	      errno = oerrno;
 	      perror ((char *) 0);
 	      host->h_addr_list++;
-	      memmove (&sin.sin_addr, host->h_addr_list[0], host->h_length);
+	      memmove ((caddr_t) & sin.sin_addr,
+		       host->h_addr_list[0], host->h_length);
 	      close (net);
 	      continue;
 	    }
@@ -2821,7 +2832,7 @@ tn (int argc, char *argv[])
       connected++;
 # if defined AUTHENTICATION || defined ENCRYPTION
       auth_encrypt_connect (connected);
-# endif/* defined(AUTHENTICATION) || defined(ENCRYPTION) */
+# endif	/* defined(AUTHENTICATION) || defined(ENCRYPTION) */
     }
   while (connected == 0);
 #endif /* !IPV6 */
@@ -2880,8 +2891,7 @@ static char
   displayhelp[] = "display operating parameters",
 #if defined TN3270 && (defined unix || defined __unix || defined __unix__)
   transcomhelp[] = "specify Unix command for transparent mode pipe",
-#endif
-  /* TN3270 && (unix || __unix || __unix__) */
+#endif /* TN3270 && (unix || __unix || __unix__) */
 #if defined AUTHENTICATION
   authhelp[] = "turn on (off) authentication ('auth ?' for more)",
 #endif
@@ -2891,8 +2901,7 @@ static char
   /* ENCRYPTION */
 #if defined unix || defined __unix || defined __unix__
   zhelp[] = "suspend telnet",
-#endif
-  /* unix || __unix || __unix__ */
+#endif /* unix || __unix || __unix__ */
   shellhelp[] = "invoke a subshell",
   envhelp[] = "change environment variables ('environ ?' for more)",
   modestring[] = "try to enter line or character mode ('mode ?' for more)";
@@ -2979,7 +2988,7 @@ getcmd (char *name)
 void
 command (int top, char *tbuf, int cnt)
 {
-  Command *c;
+  register Command *c;
 
   setcommandmode ();
   if (!top)
@@ -2999,7 +3008,7 @@ command (int top, char *tbuf, int cnt)
 	printf ("%s> ", prompt);
       if (tbuf)
 	{
-	  char *cp;
+	  register char *cp;
 	  cp = line;
 	  while (cnt > 0 && (*cp++ = *tbuf++) != '\n')
 	    cnt--;
@@ -3020,8 +3029,9 @@ command (int top, char *tbuf, int cnt)
 	      if (feof (stdin) || ferror (stdin))
 		{
 		  printf ("\n");
-		  (void) quit (0, NULL);
-		 /*NOTREACHED*/}
+		  (void) quit(0, NULL);
+		  /*NOTREACHED*/
+		}
 	      break;
 	    }
 	}
@@ -3076,7 +3086,7 @@ command (int top, char *tbuf, int cnt)
 static int
 help (int argc, char *argv[])
 {
-  Command *c;
+  register Command *c;
 
   if (argc == 1)
     {
@@ -3090,7 +3100,7 @@ help (int argc, char *argv[])
     }
   while (--argc > 0)
     {
-      char *arg;
+      register char *arg;
       arg = *++argv;
       c = getcmd (arg);
       if (Ambiguous (c))
@@ -3108,7 +3118,7 @@ static char *rcname = 0;
 static void
 cmdrc (char *m1, char *m2)
 {
-  Command *c;
+  register Command *c;
   FILE *rcfile;
   int gotmachine = 0;
   int l1 = strlen (m1);
@@ -3121,9 +3131,9 @@ cmdrc (char *m1, char *m2)
     {
       const char *home = getenv ("HOME");
       if (home)
-	rcname = xasprintf ("%s/.telnetrc", home);
+        rcname = xasprintf ("%s/.telnetrc", home);
       else
-	rcname = xstrdup ("/.telnetrc");
+        rcname = xstrdup ("/.telnetrc");
     }
 
   if ((rcfile = fopen (rcname, "r")) == 0)
@@ -3149,11 +3159,11 @@ cmdrc (char *m1, char *m2)
 	  if (isspace (line[0]))
 	    continue;
 	  if (strncasecmp (line, m1, l1) == 0)
-	    memmove (line, &line[l1], strlen (&line[l1]) + 1);
+	    memmove (line, &line[l1], strlen(&line[l1]) + 1);
 	  else if (strncasecmp (line, m2, l2) == 0)
-	    memmove (line, &line[l2], strlen (&line[l2]) + 1);
+	    memmove (line, &line[l2], strlen(&line[l2]) + 1);
 	  else if (strncasecmp (line, "DEFAULT", 7) == 0)
-	    memmove (line, &line[7], strlen (&line[7]) + 1);
+	    memmove (line, &line[7], strlen(&line[7]) + 1);
 	  else
 	    continue;
 	  if (line[0] != ' ' && line[0] != '\t' && line[0] != '\n')

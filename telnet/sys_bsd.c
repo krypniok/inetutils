@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1995-2025 Free Software Foundation, Inc.
+  Copyright (C) 1995-2022 Free Software Foundation, Inc.
 
   This file is part of GNU Inetutils.
 
@@ -70,12 +70,9 @@
 #include "types.h"
 
 #ifdef	SIGINFO
-extern void ayt_status (void);
-extern void sendayt (void);
+extern void ayt_status ();
+extern void sendayt ();
 #endif
-
-void susp (int sig);
-void ayt (int sig);
 
 int tout,			/* Output file descriptor */
   tin,				/* Input file descriptor */
@@ -85,7 +82,6 @@ int tout,			/* Output file descriptor */
 struct tchars otc = { 0 }, ntc = { 0 };
 struct ltchars oltc = { 0 }, nltc = { 0 };
 struct sgttyb ottyb = { 0 }, nttyb = { 0 };
-
 int olmode = 0;
 # define cfgetispeed(ptr)	(ptr)->sg_ispeed
 # define cfgetospeed(ptr)	(ptr)->sg_ospeed
@@ -93,7 +89,6 @@ int olmode = 0;
 
 #else /* USE_TERMIO */
 struct termio old_tc = { 0 };
-
 extern struct termio new_tc;
 
 # ifndef TCSANOW
@@ -119,7 +114,7 @@ extern struct termio new_tc;
 #  else
 #   define cfgetispeed(ptr)	cfgetospeed(ptr)
 #  endif
-# endif/* TCSANOW */
+# endif	/* TCSANOW */
 # ifdef	sysV88
 #  define TIOCFLUSH TC_PX_DRAIN
 # endif
@@ -185,8 +180,7 @@ extern int kludgelinemode;
  *	1	Do add this character
  */
 
-extern void xmitAO (void), xmitEL (void), xmitEC (void), intp (void),
-sendbrk (void);
+extern void xmitAO (void), xmitEL (void), xmitEC (void), intp (void), sendbrk (void);
 
 int
 TerminalSpecialChars (int c)
@@ -300,7 +294,7 @@ TerminalSaveState (void)
 }
 
 cc_t *
-tcval (int func)
+tcval (register int func)
 {
   switch (func)
     {
@@ -415,7 +409,7 @@ TerminalDefaultChars (void)
 
 
 void
-TerminalNewMode (int f)
+TerminalNewMode (register int f)
 {
   static int prevmode = 0;
 #ifndef USE_TERMIO
@@ -677,6 +671,13 @@ TerminalNewMode (int f)
   if (f != -1)
     {
 #ifdef	SIGTSTP
+      void susp (int sig);
+#endif /* SIGTSTP */
+#ifdef	SIGINFO
+      void ayt ();
+#endif
+
+#ifdef	SIGTSTP
       signal (SIGTSTP, susp);
 #endif /* SIGTSTP */
 #ifdef	SIGINFO
@@ -725,7 +726,9 @@ TerminalNewMode (int f)
   else
     {
 #ifdef	SIGINFO
-      signal (SIGINFO, (void (*)(int)) ayt_status);
+      void ayt_status ();
+
+      signal (SIGINFO, ayt_status);
 #endif
 #ifdef	SIGTSTP
       signal (SIGTSTP, SIG_DFL);
@@ -738,7 +741,7 @@ TerminalNewMode (int f)
       }
 # else
       sigsetmask (sigblock (0) & ~(1 << (SIGTSTP - 1)));
-# endif/* HAVE_SIGACTION */
+# endif	/* HAVE_SIGACTION */
 #endif /* SIGTSTP */
 #ifndef USE_TERMIO
       ltc = oltc;
@@ -828,40 +831,41 @@ struct termspeeds
 {
   long speed;
   long value;
-} termspeeds[] = {
-  {0, B0},
-  {50, B50},
-  {75, B75},
-  {110, B110},
-  {134, B134},
-  {150, B150},
-  {200, B200},
-  {300, B300},
-  {600, B600},
-  {1200, B1200},
-  {1800, B1800},
-  {2400, B2400},
-  {4800, B4800},
-  {7200, B7200},
-  {9600, B9600},
-  {14400, B14400},
-  {19200, B19200},
-  {28800, B28800},
-  {38400, B38400},
-  {57600, B57600},
-  {115200, B115200},
-  {230400, B230400},
-  {-1, B230400}
-};
+} termspeeds[] =
+  {
+    {0, B0},
+    {50, B50},
+    {75, B75},
+    {110, B110},
+    {134, B134},
+    {150, B150},
+    {200, B200},
+    {300, B300},
+    {600, B600},
+    {1200, B1200},
+    {1800, B1800},
+    {2400, B2400},
+    {4800, B4800},
+    {7200, B7200},
+    {9600, B9600},
+    {14400, B14400},
+    {19200, B19200},
+    {28800, B28800},
+    {38400, B38400},
+    {57600, B57600},
+    {115200, B115200},
+    {230400, B230400},
+    {-1, B230400}
+  };
 #endif /* DECODE_BAUD */
 
 void
 TerminalSpeeds (long *ispeed, long *ospeed)
 {
 #ifdef	DECODE_BAUD
-  struct termspeeds *tp;
+  register struct termspeeds *tp;
 #endif /* DECODE_BAUD */
-  long in, out;
+  register long in, out;
 
   out = cfgetospeed (&old_tc);
   in = cfgetispeed (&old_tc);
@@ -1064,7 +1068,7 @@ int
 process_rings (int netin, int netout, int netex, int ttyin, int ttyout,
 	       int poll)
 {
-  int c;
+  register int c;
   /* One wants to be a bit careful about setting returnValue
    * to one, since a one implies we did some useful work,
    * and therefore probably won't be called to block next
@@ -1078,27 +1082,27 @@ process_rings (int netin, int netout, int netex, int ttyin, int ttyout,
     {
       FD_SET (net, &obits);
       if (net > nfds)
-	nfds = net;
+        nfds = net;
     }
   if (ttyout)
     {
       FD_SET (tout, &obits);
       if (tout > nfds)
-	nfds = tout;
+        nfds = tout;
     }
 #if defined TN3270
   if (ttyin)
     {
       FD_SET (tin, &ibits);
       if (tin > nfds)
-	nfds = tin;
+        nfds = tin;
     }
 #else /* defined(TN3270) */
   if (ttyin)
     {
       FD_SET (tin, &ibits);
       if (tin > nfds)
-	nfds = tin;
+        nfds = tin;
     }
 #endif /* defined(TN3270) */
 #if defined TN3270
@@ -1106,23 +1110,23 @@ process_rings (int netin, int netout, int netex, int ttyin, int ttyout,
     {
       FD_SET (net, &ibits);
       if (net > nfds)
-	nfds = net;
+        nfds = net;
     }
 #else /* !defined(TN3270) */
   if (netin)
     {
       FD_SET (net, &ibits);
       if (net > nfds)
-	nfds = net;
+        nfds = net;
     }
 #endif /* !defined(TN3270) */
   if (netex)
     {
       FD_SET (net, &xbits);
       if (net > nfds)
-	nfds = net;
+        nfds = net;
     }
-  if ((c = select (nfds + 1, &ibits, &obits, &xbits,
+  if ((c = select (nfds+1, &ibits, &obits, &xbits,
 		   (poll == 0) ? (struct timeval *) 0 : &TimeValue)) < 0)
     {
       if (c == -1)
@@ -1310,8 +1314,8 @@ process_rings (int netin, int netout, int netex, int ttyin, int ttyout,
   if (FD_ISSET (tin, &ibits))
     {
       FD_CLR (tin, &ibits);
-      c = TerminalRead ((char *) ttyiring.supply,
-			ring_empty_consecutive (&ttyiring));
+      c = TerminalRead ((char *)ttyiring.supply,
+                        ring_empty_consecutive (&ttyiring));
       if (c < 0 && errno == EIO)
 	c = 0;
       if (c < 0 && errno == EWOULDBLOCK)

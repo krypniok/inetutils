@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 1995-2025 Free Software Foundation, Inc.
+  Copyright (C) 1995-2022 Free Software Foundation, Inc.
 
   This file is part of GNU Inetutils.
 
@@ -74,18 +74,18 @@ net_write (unsigned char *str, int len)
 }
 
 void
-net_encrypt (void)
+net_encrypt ()
 {
 # ifdef	ENCRYPTION
   if (encrypt_output)
     ring_encrypt (&netoring, encrypt_output);
   else
     ring_clearto (&netoring);
-# endif/* ENCRYPTION */
+# endif	/* ENCRYPTION */
 }
 
 int
-telnet_spin (void)
+telnet_spin ()
 {
   return (-1);
 }
@@ -99,6 +99,9 @@ telnet_getenv (char *val)
 char *
 telnet_gets (char *prompt, char *result, int length, int echo)
 {
+# if !HAVE_DECL_GETPASS
+  extern char *getpass ();
+# endif
   extern int globalmode;
   int om = globalmode;
   char *res;
