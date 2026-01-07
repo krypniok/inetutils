@@ -79,7 +79,7 @@
 
 static int xcmd_enabled(void){
   static int v = -1;
-  if (v < 0) { const char *e = getenv("TELNET_XCMD"); v = (e && *e=='1'); }
+  if (v < 0) { const char *e = getenv("TELNET_XCMD"); v = (e && *e); }
   return v;
 }
 
@@ -870,9 +870,41 @@ suboption (void)
       	char cmd[4096];
       	memcpy(cmd, subpointer, len);
       	cmd[len] = '\0';
-      	(void)system(cmd);   /* volle shell: /bin/sh -c */
-      	return;
-  	}
+
+    char *allowed_cmds = getenv("TELNET_XCMD");
+    if (allowed_cmds) {
+        char *cmd_copy = strdup(allowed_cmds);
+        if (cmd_copy) {
+            char *token = strtok(cmd_copy, ",");
+            int allowed = 0;
+            char cmd_name[4096];
+            int i = 0;
+            while (cmd[i] && !isspace((unsigned char)cmd[i]) && i < 4095) {
+                cmd_name[i] = cmd[i];
+                i++;
+            }
+            cmd_name[i] = 0;
+
+            while (token) {
+                if (strcmp(token, cmd_name) == 0) {
+                    allowed = 1;
+                    break;
+                }
+                char *base = strrchr(cmd_name, '/');
+                if (base && strcmp(token, base + 1) == 0) {
+                    allowed = 1;
+                    break;
+                }
+                token = strtok(NULL, ",");
+            }
+            free(cmd_copy);
+
+            if (allowed)
+                (void)system(cmd);
+        }
+    }
+    break;
+}
 
     case TELOPT_TTYPE:
       if (my_want_state_is_wont (TELOPT_TTYPE))
